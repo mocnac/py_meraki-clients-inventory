@@ -4,6 +4,15 @@ import argparse
 import getpass
 import logging
 import sys
+from datetime import datetime
+try:
+    import pandas
+except:
+    print("Module 'pandas' not found, therefore exports into .xls are not possible.")
+else:
+    import pandas
+    v_pandas = True
+
 #################################################################################################
 # inline arguments - otherwise use arguments "-K / -O"
 # API_KEY = ""
@@ -14,6 +23,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-K', '--api_key', help='Your API Key', default = '', required=False)
 parser.add_argument('-O', '--org_id', help='Your Organization ID', default = '', required=False)
 parser.add_argument('-F', '--out_file', help='Target file name', default = '', required=False)
+parser.add_argument('-T', '--out_type', help='Target file type', default = 'csv', required=False, choices=["xls","csv"])
 parser.add_argument('-v', '--verbose', help='Run Script with informational (-v) or debugging (-vv) logging output. For troubleshooting purposes.', action='count', required=False)
 parser.add_argument('-f', '--filter-network-tags', help='string to filter for network tags', default = '', required=False)
 args = parser.parse_args()
@@ -34,13 +44,15 @@ if not args.org_id:
             print("No ID given - aborting!")
             sys.exit(1)
     else: args.org_id = ORG_ID
+
 if not args.out_file:
     try: OUT_FILE
     except: 
         args.out_file = getpass.getpass(prompt="Enter target file name:")
         if args.out_file == '':
-            print("No file name given - using default!")
-            args.out_file = "meraki_clients.csv"
+            ts=datetime.now().strftime('%Y%m%d-%H%M')
+            print("No file name given - using default (meraki_clients-{}.csv/.xlsx)!".format(ts))
+            args.out_file = "meraki_clients-{}.csv".format(ts)
     else: args.out_file = OUT_FILE
 
 
@@ -88,6 +100,7 @@ for a in networks:
                 lines.append(clients)
             else: pass
 
+
 with open(args.out_file, 'w',newline='') as file:
     writer = csv.writer(file, delimiter=',', quoting=csv.QUOTE_MINIMAL)
     writer.writerow(clients.keys())
@@ -96,4 +109,10 @@ with open(args.out_file, 'w',newline='') as file:
         line.update((k, "False") for k, v in line.items() if v == False)
         line.update((k, "True") for k, v in line.items() if v == True)
         writer.writerow(line.values())
+
+if args.out_type == "xls" and v_pandas == True:
+    df = pandas.read_csv(args.out_file)
+    with pandas.ExcelWriter(args.out_file.replace("csv","xlsx"), engine = 'xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='mrk clients', index = False)
+
 print("################## DONE - Results have been written to {0} ##################".format(args.out_file))
